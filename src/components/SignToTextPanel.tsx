@@ -109,38 +109,40 @@ export default function SignToTextPanel() {
     <div className="panel sign-to-text">
       <CameraView onLandmarks={handleLandmarks} />
 
-      <div className="mode-row">
-        <button
-          className={mode === 'rules' ? 'chip chip-active' : 'chip'}
-          onClick={() => setMode('rules')}
-        >
-          Quick Start
-        </button>
-        <button
-          className={mode === 'trained' ? 'chip chip-active' : 'chip'}
-          onClick={() => setMode('trained')}
-        >
-          My Trained Signs
-        </button>
-        <button className="chip" onClick={() => setShowTraining(v => !v)}>
-          {showTraining ? 'Hide Trainer' : 'Train Signs'}
-        </button>
+      <div className="side-stack">
+        <div className="mode-row">
+          <button
+            className={mode === 'rules' ? 'chip chip-active' : 'chip'}
+            onClick={() => setMode('rules')}
+          >
+            Quick Start
+          </button>
+          <button
+            className={mode === 'trained' ? 'chip chip-active' : 'chip'}
+            onClick={() => setMode('trained')}
+          >
+            My Trained Signs
+          </button>
+          <button className="chip" onClick={() => setShowTraining(v => !v)}>
+            {showTraining ? 'Hide Trainer' : 'Train Signs'}
+          </button>
+        </div>
+
+        {showTraining && (
+          <TrainingPanel getLandmarks={() => lastLandmarksRef.current} trainable={trainable} />
+        )}
+
+        <CaptionBar
+          text={caption}
+          liveLabel={noHand ? null : liveLabel}
+          confidence={confidence}
+          onClear={() => setCaption('')}
+          onBackspace={() =>
+            setCaption(prev => prev.trim().split(' ').slice(0, -1).join(' '))
+          }
+          onSpeak={() => speak(caption)}
+        />
       </div>
-
-      {showTraining && (
-        <TrainingPanel getLandmarks={() => lastLandmarksRef.current} trainable={trainable} />
-      )}
-
-      <CaptionBar
-        text={caption}
-        liveLabel={noHand ? null : liveLabel}
-        confidence={confidence}
-        onClear={() => setCaption('')}
-        onBackspace={() =>
-          setCaption(prev => prev.trim().split(' ').slice(0, -1).join(' '))
-        }
-        onSpeak={() => speak(caption)}
-      />
     </div>
   )
 }

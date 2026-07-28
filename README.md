@@ -1,7 +1,9 @@
 # ASL Translator
 
-A mobile-first, real-time American Sign Language (ASL) ⇄ English translator that runs
-**entirely on-device** in the browser — no server, no video upload, no API keys.
+A real-time American Sign Language (ASL) ⇄ English translator that runs **entirely
+on-device** in the browser — no server, no video upload, no API keys. Responsive layout
+works on both mobile (portrait, touch-first) and desktop (wide viewport, two-column) —
+same camera/MediaPipe/classifier logic underneath, just laid out to fit the screen.
 
 Built with React + Vite + TypeScript, [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)
 for hand-landmark detection, and [TensorFlow.js](https://www.tensorflow.org/js) for an
@@ -42,10 +44,15 @@ on-device trainable classifier. Installable as a PWA.
   handshape spec per letter (`src/lib/fingerspellingData.ts`), not photographic references
   — see **Limitations** below for why.
 
-### Mobile-first PWA shell
+### Responsive PWA shell (mobile + desktop)
 
-- Portrait, touch-first layout (44px+ tap targets, safe-area insets, no pinch-zoom) that
-  fits a phone screen without scrolling.
+- **Mobile** (< 900px): portrait, touch-first single-column layout (44px+ tap targets,
+  safe-area insets, no pinch-zoom) that fits a phone screen without scrolling.
+- **Desktop** (≥ 900px): a wider two-column layout kicks in via CSS media queries in
+  `src/index.css` — camera feed (or diagram stage) on one side, controls/caption/typed
+  input in a fixed-width column alongside it, instead of the mobile column stretching
+  edge-to-edge on a wide screen. Same components and logic, just re-flowed — no separate
+  desktop codepath.
 - Configured as an installable PWA via `vite-plugin-pwa` (add-to-home-screen, offline app
   shell caching, auto-updating service worker).
 
@@ -111,7 +118,7 @@ those letters.
 └── src/
     ├── main.tsx
     ├── App.tsx                 # Mode switch (Sign→Text / Text→Sign)
-    ├── index.css               # Mobile-first styling
+    ├── index.css               # Mobile-first styling + desktop (≥900px) media queries
     ├── lib/
     │   ├── handLandmarker.ts       # MediaPipe HandLandmarker setup
     │   ├── landmarkFeatures.ts     # Landmark geometry helpers (curl/extension, distances)

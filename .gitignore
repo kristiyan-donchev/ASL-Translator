@@ -23,3 +23,8 @@ npm-debug.log*
 
 # pwa generated files
 dev-dist
+
+# tsc build info / accidental emit from tsconfig.node.json
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
