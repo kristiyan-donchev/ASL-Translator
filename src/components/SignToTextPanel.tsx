@@ -14,9 +14,6 @@ const MIN_CONFIDENCE = 0.4
 
 function appendToken(prev: string, token: string): string {
   const t = token.toUpperCase()
-  // Multi-character tokens are word-level signs (e.g. "I LOVE YOU") and get
-  // their own space-separated slot; single letters are appended directly
-  // to build up a fingerspelled word.
   if (t.length > 1) return (prev ? prev + ' ' : '') + t
   return prev + t
 }
@@ -27,12 +24,6 @@ function speak(text: string) {
   window.speechSynthesis.speak(new SpeechSynthesisUtterance(text))
 }
 
-/**
- * The "Sign -> Text" experience: live camera + hand-landmark detection,
- * running either the built-in geometric classifier or a user-trained KNN
- * classifier, with temporal smoothing so a held sign commits to the
- * caption once (rather than spamming duplicate letters every frame).
- */
 export default function SignToTextPanel() {
   const [caption, setCaption] = useState('')
   const [liveLabel, setLiveLabel] = useState<string | null>(null)
@@ -109,7 +100,7 @@ export default function SignToTextPanel() {
     <div className="panel sign-to-text">
       <CameraView onLandmarks={handleLandmarks} />
 
-      <div className="side-stack">
+      <div className="sign-side">
         <div className="mode-row">
           <button
             className={mode === 'rules' ? 'chip chip-active' : 'chip'}

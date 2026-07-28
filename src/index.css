@@ -79,7 +79,6 @@ textarea {
   flex-shrink: 0;
 }
 
-/* Mode toggle */
 .mode-toggle {
   display: flex;
   background: var(--panel);
@@ -105,7 +104,6 @@ textarea {
   color: #04222b;
 }
 
-/* Panels */
 .panel {
   flex: 1;
   min-height: 0;
@@ -115,7 +113,10 @@ textarea {
   padding: 0 12px 12px;
 }
 
-/* Camera */
+.sign-side {
+  display: contents;
+}
+
 .camera-view {
   position: relative;
   flex: 1;
@@ -168,7 +169,6 @@ textarea {
   background: var(--accent-dim);
 }
 
-/* Caption bar anchored at bottom of camera panel */
 .caption-bar {
   background: var(--panel);
   border-radius: 18px;
@@ -219,7 +219,6 @@ textarea {
   font-size: 1.1rem;
 }
 
-/* Training panel */
 .training-panel {
   background: var(--panel);
   border-radius: 14px;
@@ -295,9 +294,42 @@ textarea {
   color: var(--danger);
 }
 
-/* Text -> Sign panel */
-.text-to-sign {
+.panel.text-to-sign {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto auto auto auto;
+  grid-template-areas:
+    'input'
+    'diagram'
+    'progress'
+    'controls'
+    'speed'
+    'note';
   gap: 12px;
+}
+
+.text-to-sign .text-input {
+  grid-area: input;
+}
+
+.text-to-sign .diagram-stage {
+  grid-area: diagram;
+}
+
+.text-to-sign .progress-row {
+  grid-area: progress;
+}
+
+.text-to-sign .controls-row {
+  grid-area: controls;
+}
+
+.text-to-sign .speed-row {
+  grid-area: speed;
+}
+
+.text-to-sign .scope-note {
+  grid-area: note;
 }
 
 .text-input {
@@ -392,31 +424,26 @@ textarea {
   margin: 0;
 }
 
-/* ---------------------------------------------------------------- */
-/* Desktop / wide-viewport layout                                    */
-/* The mobile-first rules above still apply below this breakpoint;   */
-/* everything here only kicks in on wide screens so the same camera/ */
-/* MediaPipe/classifier logic just gets more room to breathe.        */
-/* ---------------------------------------------------------------- */
-@media (min-width: 900px) {
-  body {
-    display: flex;
-    justify-content: center;
+@media (min-width: 860px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
   }
 
   .app-shell {
-    max-width: 1180px;
-    width: 100%;
-    height: 100vh;
-    padding-left: 24px;
-    padding-right: 24px;
+    height: auto;
+    min-height: 100vh;
+    max-width: 1200px;
+    padding-bottom: 24px;
   }
 
   .app-header {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 4px 16px;
+    padding: 20px 28px 8px;
   }
 
   .app-header h1 {
@@ -424,61 +451,58 @@ textarea {
   }
 
   .mode-toggle {
-    width: 320px;
+    max-width: 360px;
+  }
+
+  .app-main {
+    overflow: visible;
   }
 
   .panel {
-    padding: 0 4px 16px;
+    padding: 0 28px 24px;
   }
 
-  /* Sign -> Text: camera on the left, controls/caption in a fixed-width
-     column on the right instead of stacking full-width under the camera. */
   .panel.sign-to-text {
-    flex-direction: row;
-    gap: 24px;
-  }
-
-  .panel.sign-to-text .camera-view {
-    flex: 1.4;
-  }
-
-  .side-stack {
-    flex: 1;
-    max-width: 420px;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .side-stack .caption-bar {
-    margin-top: auto;
-  }
-
-  /* Text -> Sign: input/controls column beside a larger diagram stage. */
-  .panel.text-to-sign {
     flex-direction: row;
     align-items: stretch;
     gap: 24px;
   }
 
-  .text-controls {
-    flex: 1;
-    max-width: 380px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  .panel.sign-to-text .camera-view {
+    flex: 1 1 55%;
+    max-width: 640px;
+    max-height: 720px;
   }
 
-  .diagram-stage {
-    flex: 1.4;
+  .sign-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1 1 380px;
+    max-width: 440px;
+    justify-content: flex-start;
+  }
+
+  .panel.text-to-sign {
+    grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas:
+      'diagram input'
+      'diagram progress'
+      'diagram controls'
+      'diagram speed'
+      'diagram note';
+    align-items: start;
+    gap: 24px;
+  }
+
+  .text-to-sign .diagram-stage {
+    height: 100%;
+    min-height: 420px;
   }
 
   .hand-diagram {
+    width: 65%;
     max-width: 320px;
-  }
-
-  .diagram-label {
-    font-size: 2rem;
   }
 }

@@ -2,8 +2,8 @@
 
 A real-time American Sign Language (ASL) ⇄ English translator that runs **entirely
 on-device** in the browser — no server, no video upload, no API keys. Responsive layout
-works on both mobile (portrait, touch-first) and desktop (wide viewport, two-column) —
-same camera/MediaPipe/classifier logic underneath, just laid out to fit the screen.
+works on both mobile (portrait, touch-first) and desktop (≥860px, two-column) — same
+camera/MediaPipe/classifier logic underneath, just laid out to fit the screen.
 
 Built with React + Vite + TypeScript, [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)
 for hand-landmark detection, and [TensorFlow.js](https://www.tensorflow.org/js) for an
@@ -44,15 +44,27 @@ on-device trainable classifier. Installable as a PWA.
   handshape spec per letter (`src/lib/fingerspellingData.ts`), not photographic references
   — see **Limitations** below for why.
 
-### Responsive PWA shell (mobile + desktop)
+### Responsive layout: mobile + desktop
 
-- **Mobile** (< 900px): portrait, touch-first single-column layout (44px+ tap targets,
-  safe-area insets, no pinch-zoom) that fits a phone screen without scrolling.
-- **Desktop** (≥ 900px): a wider two-column layout kicks in via CSS media queries in
-  `src/index.css` — camera feed (or diagram stage) on one side, controls/caption/typed
-  input in a fixed-width column alongside it, instead of the mobile column stretching
-  edge-to-edge on a wide screen. Same components and logic, just re-flowed — no separate
-  desktop codepath.
+One codebase, one set of components, driven entirely by CSS — there's no separate desktop
+build or code path.
+
+- **Mobile** (< 860px) is the original, unchanged design: a portrait, touch-first
+  single-column layout (44px+ tap targets, safe-area insets, no pinch-zoom) that fits a
+  phone screen without scrolling.
+- **Desktop** (≥ 860px) reflows the same markup via a `@media (min-width: 860px)` block in
+  `src/index.css`:
+  - **Sign → Text** switches from a stacked column to camera-left / sidebar-right. The
+    sidebar (mode toggle, trainer, caption bar) is wrapped in a `.sign-side` element that's
+    `display: contents` on mobile (so it has zero layout effect and the original stacking
+    order is preserved exactly) and becomes a real `display: flex; flex-direction: column`
+    sidebar once the desktop media query takes over.
+  - **Text → Sign** switches `.panel.text-to-sign` from a flex column to a CSS Grid with
+    named `grid-template-areas`, reflowing into a diagram-left / input-and-controls-right
+    two-column layout. Because the grid areas are assigned by existing class name
+    (`.text-input`, `.diagram-stage`, `.progress-row`, `.controls-row`, `.speed-row`,
+    `.scope-note`), **`TextToSignPanel.tsx` needed no JSX changes at all** — the desktop
+    layout comes entirely from CSS Grid reassigning where each element renders.
 - Configured as an installable PWA via `vite-plugin-pwa` (add-to-home-screen, offline app
   shell caching, auto-updating service worker).
 
@@ -118,7 +130,7 @@ those letters.
 └── src/
     ├── main.tsx
     ├── App.tsx                 # Mode switch (Sign→Text / Text→Sign)
-    ├── index.css               # Mobile-first styling + desktop (≥900px) media queries
+    ├── index.css               # Responsive styling (mobile-first, + desktop media query)
     ├── lib/
     │   ├── handLandmarker.ts       # MediaPipe HandLandmarker setup
     │   ├── landmarkFeatures.ts     # Landmark geometry helpers (curl/extension, distances)
