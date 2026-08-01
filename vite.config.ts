@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-const base = '/asl-translator/'
+const base = '/ASL-Translator/'
 
 // https://vitejs.dev/config/
 export default defineConfig({
