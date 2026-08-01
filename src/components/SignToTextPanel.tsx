@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import CameraView from './CameraView'
+import VideoFileView from './VideoFileView'
 import CaptionBar from './CaptionBar'
 import TrainingPanel from './TrainingPanel'
 import { classifyStaticSign } from '../lib/aslAlphabetClassifier'
@@ -7,6 +8,7 @@ import { TrainableSignClassifier } from '../lib/knnSignClassifier'
 import type { Point } from '../lib/landmarkFeatures'
 
 type ClassifierMode = 'rules' | 'trained'
+type Source = 'camera' | 'upload'
 
 const STABLE_FRAMES = 10
 const COMMIT_COOLDOWN_MS = 700
@@ -31,15 +33,43 @@ export default function SignToTextPanel() {
   const [mode, setMode] = useState<ClassifierMode>('rules')
   const [showTraining, setShowTraining] = useState(false)
   const [noHand, setNoHand] = useState(true)
+  const [source, setSource] = useState<Source>('camera')
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoDone, setVideoDone] = useState(false)
 
   const trainable = useMemo(() => new TrainableSignClassifier(), [])
   const modeRef = useRef(mode)
   modeRef.current = mode
 
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const bufferRef = useRef<string[]>([])
   const lastCommitRef = useRef<{ label: string; time: number }>({ label: '', time: 0 })
   const lastLandmarksRef = useRef<Point[] | null>(null)
   const busyRef = useRef(false)
+
+  const resetTranscript = useCallback(() => {
+    setCaption('')
+    setLiveLabel(null)
+    setConfidence(0)
+    setNoHand(true)
+    bufferRef.current = []
+    lastCommitRef.current = { label: '', time: 0 }
+  }, [])
+
+  const handlePickVideo = useCallback(
+    (file: File) => {
+      resetTranscript()
+      setVideoDone(false)
+      setVideoFile(file)
+      setSource('upload')
+    },
+    [resetTranscript]
+  )
+
+  const switchToCamera = useCallback(() => {
+    resetTranscript()
+    setSource('camera')
+  }, [resetTranscript])
 
   const handleLandmarks = useCallback(
     (lm: Point[] | null) => {
@@ -98,9 +128,51 @@ export default function SignToTextPanel() {
 
   return (
     <div className="panel sign-to-text">
-      <CameraView onLandmarks={handleLandmarks} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        className="visually-hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) handlePickVideo(file)
+          e.target.value = ''
+        }}
+      />
+
+      {source === 'camera' ? (
+        <CameraView onLandmarks={handleLandmarks} />
+      ) : videoFile ? (
+        <VideoFileView
+          key={videoFile.name + videoFile.lastModified}
+          file={videoFile}
+          onLandmarks={handleLandmarks}
+          onEnded={() => setVideoDone(true)}
+        />
+      ) : null}
 
       <div className="sign-side">
+        <div className="mode-row">
+          <button
+            className={source === 'camera' ? 'chip chip-active' : 'chip'}
+            onClick={switchToCamera}
+          >
+            Live Camera
+          </button>
+          <button
+            className={source === 'upload' ? 'chip chip-active' : 'chip'}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Upload Video
+          </button>
+        </div>
+
+        {source === 'upload' && videoDone && (
+          <p className="training-feedback">
+            Reached the end of the video — replay it, or upload another, to keep translating.
+          </p>
+        )}
+
         <div className="mode-row">
           <button
             className={mode === 'rules' ? 'chip chip-active' : 'chip'}
