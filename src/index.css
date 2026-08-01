@@ -185,6 +185,18 @@ textarea {
   background: var(--accent-dim);
 }
 
+.gesture-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .caption-bar {
   background: var(--panel);
   border-radius: 18px;

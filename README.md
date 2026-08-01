@@ -13,26 +13,37 @@ on-device trainable classifier. Installable as a PWA.
 
 ## What's implemented
 
-### Sign → Text (live camera → captions)
+### Sign → Text (camera or uploaded video → captions)
 
 - Live camera feed rendered full-screen (mobile portrait layout), mirrored for a natural
-  selfie view.
+  selfie view — or, via the **Live Camera / Upload Video** source toggle, a pre-recorded
+  video file played back through the same detection pipeline (`src/components/VideoFileView.tsx`),
+  for translating a clip of someone else signing instead of your own camera.
 - Real hand-landmark detection every frame via MediaPipe's `HandLandmarker` (21 3D
   landmarks per hand), running on-device via WebAssembly/WebGL (GPU delegate, with an
   automatic CPU fallback if GPU delegation isn't supported).
-- Two classifier modes, switchable in the UI:
+- Three classifier modes, switchable in the UI:
   - **Quick Start** — a deterministic, geometry-based classifier (`src/lib/aslAlphabetClassifier.ts`)
     that needs no training and recognizes handshapes from finger curl/extension state and
-    fingertip distances computed from the landmarks.
+    fingertip distances computed from the landmarks. Static single-frame letters only.
   - **My Trained Signs** — an on-device k-NN classifier (`src/lib/knnSignClassifier.ts`,
     using `@tensorflow-models/knn-classifier`) that you train yourself in the "Train Signs"
     panel: hold a sign, capture a burst of samples, and it's immediately recognizable. This
     is a genuine transfer-learning pattern — MediaPipe's pretrained landmark model acts as
-    the feature extractor, and the k-NN head is fit on your own recorded examples.
+    the feature extractor, and the k-NN head is fit on your own recorded examples. Static
+    handshapes only (one held pose per example).
+  - **Words & Phrases** — a trainable *motion* classifier (`src/lib/gestureClassifier.ts`) for
+    signs defined by movement, which is most everyday ASL words ("HELLO", "THANK YOU",
+    "PLEASE", ...) rather than a single static handshape. You record a short clip of the
+    whole sign in the "Train Signs" panel's "Motion / Word" tab; recognition matches a
+    completed motion (segmented automatically whenever your hand leaves frame, or manually
+    via "Mark Sign Complete") against your recordings using Dynamic Time Warping, so the
+    same sign performed faster or slower than it was recorded still matches. See **Model
+    approach & accuracy expectations** below for how this works and its honest limits.
 - Recognized letters/words are temporally smoothed (a sign must be held steadily for ~10
-  consecutive frames before it "commits") and appended to a caption bar anchored at the
-  bottom of the screen, updating live. Includes backspace, clear, and text-to-speech
-  playback of the caption.
+  consecutive frames before it "commits" in Quick Start / My Trained Signs mode) and
+  appended to a caption bar anchored at the bottom of the screen, updating live. Includes
+  backspace, clear, and text-to-speech playback of the caption.
 
 ### Text → Sign (typed English → ASL reference)
 
@@ -92,21 +103,40 @@ geometry-only classifier has real, honest limits:
    neighbor letter only by exact thumb placement a few millimeters away (A/S/T/M/N). A
    single static frame and simple distance heuristics can't reliably resolve that — claiming
    otherwise would be overselling it.
-3. **My Trained Signs (k-NN)** is how this project reaches "a solid working set of signs"
-   honestly: since it's trained on *your* camera angle and *your* hand, it naturally
+3. **My Trained Signs (k-NN)** is how this project reaches "a solid working set of *static*
+   signs" honestly: since it's trained on *your* camera angle and *your* hand, it naturally
    sidesteps the orientation ambiguity above. In practice, capturing ~8-10 examples per sign
-   (a few seconds) gives noticeably reliable recognition for that sign in that session. This
-   is also how you add words beyond the built-in alphabet — the Train panel suggests common
-   words (HELLO, THANK YOU, PLEASE, YES, NO, SORRY, GOOD, BAD, MORE, HELP) as one-tap labels,
-   or you can type any custom label.
-
-**What's out of scope for this build, and why:** true continuous/motion signs (J, Z, and
-most everyday words like HELLO, THANK YOU, PLEASE, which are defined by a *movement*, not a
-static pose) aren't recognized from a single frame. Doing that properly needs a temporal
-model over a sequence of landmark frames (e.g. an LSTM/temporal CNN or DTW-based sequence
-matching), which is a meaningful follow-on project, not a one-off classifier. The trained
-k-NN mode captures a single held pose per example, so it works best for signs that have a
-distinct static handshape even if the "textbook" sign involves motion.
+   (a few seconds) gives noticeably reliable recognition for that sign in that session. It
+   still only captures a single held pose per example, though, so it's best for signs that
+   have a distinct static handshape even if the "textbook" ASL sign technically involves
+   motion.
+4. **Words & Phrases (DTW motion matching)** is what actually covers real ASL words and
+   phrases, which are overwhelmingly defined by movement rather than a static handshape (a
+   wave for HELLO, fingers moving from the chin outward for THANK YOU, etc.). Recording a
+   sign captures the whole landmark sequence over the clip
+   (`src/lib/gestureClassifier.ts`); recognizing one segments the live/video landmark stream
+   automatically (whenever the tracked hand leaves frame, or via the manual "Mark Sign
+   Complete" button) and compares that segment's landmark sequence against every recorded
+   example using [Dynamic Time Warping](https://en.wikipedia.org/wiki/Dynamic_time_warping)
+   — a band-constrained DTW, specifically, using the nearest example's distance (converted
+   to a 0-1 confidence via a fixed distance-scale constant) as the match. DTW is the right
+   tool here because it non-linearly aligns two sequences, so the same sign performed
+   noticeably faster or slower than it was recorded still matches — a plain frame-by-frame
+   comparison would require near-identical timing, which no two human performances of a
+   sign actually have.
+   - **Honest limits of this approach**: the landmark sequence is deliberately *not*
+     wrist-normalized like the static classifiers' feature vector — a gesture's path across
+     the frame is part of what makes it that sign — which means recognition is somewhat
+     sensitive to signing in roughly the same on-screen position/distance-from-camera you
+     recorded it in. There's no body/face landmark to anchor gestures to (e.g. "near the
+     chin"), since the app only runs MediaPipe's hand-only model, not a full holistic-pose
+     model, so "position" here really means "position in the camera frame," a weaker proxy.
+     The confidence threshold and DTW band width are heuristics tuned against synthetic
+     motion sequences (see `src/lib/gestureClassifier.ts` for the constants), not a labeled
+     accuracy benchmark — same caveat as the rule-based classifier's confidence numbers.
+     Segmentation assumes a natural pause (hand leaving frame) between signs; for continuous
+     signing where the hand never fully leaves frame, use "Mark Sign Complete" to mark
+     boundaries manually.
 
 **Reverse-mode diagrams** are schematic (rectangles standing in for palm/fingers/thumb),
 not photographic ASL charts, because no image assets are available in this build
@@ -135,14 +165,16 @@ those letters.
     │   ├── handLandmarker.ts       # MediaPipe HandLandmarker setup
     │   ├── landmarkFeatures.ts     # Landmark geometry helpers (curl/extension, distances)
     │   ├── aslAlphabetClassifier.ts# Rule-based "Quick Start" classifier
-    │   ├── knnSignClassifier.ts    # Trainable on-device k-NN classifier
+    │   ├── knnSignClassifier.ts    # Trainable on-device k-NN classifier (static poses)
+    │   ├── gestureClassifier.ts    # Trainable DTW motion classifier (words/phrases)
     │   └── fingerspellingData.ts   # Handshape specs for the reverse-mode diagrams
     └── components/
         ├── CameraView.tsx          # Camera + detection loop + landmark overlay
+        ├── VideoFileView.tsx       # Uploaded-video playback + same detection loop
         ├── CaptionBar.tsx          # Bottom-anchored live caption
         ├── ModeToggle.tsx          # Sign→Text / Text→Sign switch
         ├── SignToTextPanel.tsx     # Sign→Text screen (classification + smoothing)
-        ├── TrainingPanel.tsx       # Record-your-own-sign UI for the k-NN classifier
+        ├── TrainingPanel.tsx       # Record-your-own-sign UI (static pose + motion capture)
         ├── TextToSignPanel.tsx     # Text→Sign screen (typed text → diagrams)
         └── HandDiagram.tsx         # Procedural SVG handshape renderer
 ```
@@ -182,13 +214,16 @@ inference (hand tracking + classification) happens locally in the browser.
 
 ## Limitations summary
 
-- Static-frame classification only — no motion/trajectory modeling (affects J, Z, and most
-  everyday phrase-level ASL words).
+- Quick Start and My Trained Signs are static-frame classification only — no motion
+  modeling. Motion signs (J, Z, and most everyday phrase-level ASL words) need the Words &
+  Phrases (DTW) mode instead, and there's no built-in vocabulary for it — every word/phrase
+  has to be recorded by the user first (see the honest-limits note under **Model approach**
+  above for why: no bundled/pretrained word-level ASL model ships with this app).
 - Rule-based classifier covers a deliberately limited, geometrically-unambiguous letter
   subset; the rest require the trainable k-NN mode.
-- Trained k-NN signs are session-only (in-memory) in this build — there's no persistence
-  across page reloads yet. Adding `IndexedDB` persistence for trained examples is a natural
-  next step.
+- Trained signs (both the static k-NN and the DTW motion classifier) are session-only
+  (in-memory) in this build — there's no persistence across page reloads yet. Adding
+  `IndexedDB` persistence for trained examples is a natural next step.
 - Reverse-mode hand diagrams are schematic, not photographic, and a few letters (G, H, K,
   P, Q, R) are visually simplified due to being sideways/downward-facing signs in real ASL.
 - Recognition assumes one hand, facing the camera, without heavy occlusion or extreme motion

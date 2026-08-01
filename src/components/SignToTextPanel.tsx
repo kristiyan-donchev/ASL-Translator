@@ -1,13 +1,20 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CameraView from './CameraView'
 import VideoFileView from './VideoFileView'
 import CaptionBar from './CaptionBar'
 import TrainingPanel from './TrainingPanel'
 import { classifyStaticSign } from '../lib/aslAlphabetClassifier'
 import { TrainableSignClassifier } from '../lib/knnSignClassifier'
+import {
+  TrainableGestureClassifier,
+  GESTURE_MIN_FRAMES_TO_COMMIT,
+  GESTURE_MAX_BUFFER_FRAMES,
+  GESTURE_MIN_CONFIDENCE
+} from '../lib/gestureClassifier'
+import type { GestureFrame } from '../lib/gestureClassifier'
 import type { Point } from '../lib/landmarkFeatures'
 
-type ClassifierMode = 'rules' | 'trained'
+type ClassifierMode = 'rules' | 'trained' | 'gesture'
 type Source = 'camera' | 'upload'
 
 const STABLE_FRAMES = 10
@@ -36,8 +43,10 @@ export default function SignToTextPanel() {
   const [source, setSource] = useState<Source>('camera')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoDone, setVideoDone] = useState(false)
+  const [gestureFrameCount, setGestureFrameCount] = useState(0)
 
   const trainable = useMemo(() => new TrainableSignClassifier(), [])
+  const gestureTrainable = useMemo(() => new TrainableGestureClassifier(), [])
   const modeRef = useRef(mode)
   modeRef.current = mode
 
@@ -46,6 +55,7 @@ export default function SignToTextPanel() {
   const lastCommitRef = useRef<{ label: string; time: number }>({ label: '', time: 0 })
   const lastLandmarksRef = useRef<Point[] | null>(null)
   const busyRef = useRef(false)
+  const gestureBufferRef = useRef<GestureFrame[]>([])
 
   const resetTranscript = useCallback(() => {
     setCaption('')
@@ -54,6 +64,8 @@ export default function SignToTextPanel() {
     setNoHand(true)
     bufferRef.current = []
     lastCommitRef.current = { label: '', time: 0 }
+    gestureBufferRef.current = []
+    setGestureFrameCount(0)
   }, [])
 
   const handlePickVideo = useCallback(
@@ -71,9 +83,54 @@ export default function SignToTextPanel() {
     setSource('camera')
   }, [resetTranscript])
 
+  // Discard any in-progress gesture recording when the classifier mode
+  // changes, so frames from one mode never leak into another, and clear
+  // the stale "live" indicator left over from whichever mode was active.
+  useEffect(() => {
+    gestureBufferRef.current = []
+    setGestureFrameCount(0)
+    setLiveLabel(null)
+    setConfidence(0)
+  }, [mode])
+
+  const commitGesture = useCallback(() => {
+    const frames = gestureBufferRef.current
+    gestureBufferRef.current = []
+    setGestureFrameCount(0)
+    if (frames.length < GESTURE_MIN_FRAMES_TO_COMMIT) return
+
+    const result = gestureTrainable.predict(frames)
+    if (result && result.confidence >= GESTURE_MIN_CONFIDENCE) {
+      setLiveLabel(result.label)
+      setConfidence(result.confidence)
+      setCaption(prev => appendToken(prev, result.label))
+    }
+  }, [gestureTrainable])
+
+  const handleGestureFrame = useCallback(
+    (lm: Point[] | null) => {
+      if (lm) {
+        setNoHand(false)
+        const buf = gestureBufferRef.current
+        buf.push(lm)
+        setGestureFrameCount(buf.length)
+        if (buf.length >= GESTURE_MAX_BUFFER_FRAMES) commitGesture()
+      } else {
+        setNoHand(true)
+        commitGesture()
+      }
+    },
+    [commitGesture]
+  )
+
   const handleLandmarks = useCallback(
     (lm: Point[] | null) => {
       lastLandmarksRef.current = lm
+
+      if (modeRef.current === 'gesture') {
+        handleGestureFrame(lm)
+        return
+      }
 
       if (!lm) {
         setNoHand(true)
@@ -123,7 +180,7 @@ export default function SignToTextPanel() {
         }
       })()
     },
-    [trainable]
+    [trainable, handleGestureFrame]
   )
 
   return (
@@ -186,18 +243,45 @@ export default function SignToTextPanel() {
           >
             My Trained Signs
           </button>
+          <button
+            className={mode === 'gesture' ? 'chip chip-active' : 'chip'}
+            onClick={() => setMode('gesture')}
+          >
+            Words &amp; Phrases
+          </button>
           <button className="chip" onClick={() => setShowTraining(v => !v)}>
             {showTraining ? 'Hide Trainer' : 'Train Signs'}
           </button>
         </div>
 
+        {mode === 'gesture' && (
+          <div className="gesture-status">
+            <span>
+              {noHand
+                ? 'Show your hand and perform a sign, then pause or move it out of frame.'
+                : `Signing… ${gestureFrameCount} frame(s) captured`}
+            </span>
+            <button
+              className="chip"
+              onClick={commitGesture}
+              disabled={gestureFrameCount < GESTURE_MIN_FRAMES_TO_COMMIT}
+            >
+              Mark Sign Complete
+            </button>
+          </div>
+        )}
+
         {showTraining && (
-          <TrainingPanel getLandmarks={() => lastLandmarksRef.current} trainable={trainable} />
+          <TrainingPanel
+            getLandmarks={() => lastLandmarksRef.current}
+            trainable={trainable}
+            gestureTrainable={gestureTrainable}
+          />
         )}
 
         <CaptionBar
           text={caption}
-          liveLabel={noHand ? null : liveLabel}
+          liveLabel={mode === 'gesture' ? liveLabel : noHand ? null : liveLabel}
           confidence={confidence}
           onClear={() => setCaption('')}
           onBackspace={() =>
